@@ -1,0 +1,114 @@
+```docker
+name: "gitlab"
+services:
+  # This is GITLAB Server instance
+  gitlab:
+    container_name: gitlab
+    image: "gitlab/gitlab-ce:18.3.2-ce.0"
+    restart: unless-stopped
+    hostname: "gitlab.example.com"
+    extra_hosts:
+      - "gitlab.example.com:172.20.0.10"
+      - "maildev.example.ru:172.20.0.5"
+      - "registry.example.com:172.20.0.10"
+    networks:
+      net:
+        ipv4_address: 172.20.0.10
+    healthcheck:
+      test: ["CMD", "/usr/local/sbin/healthcheck"]
+      interval: 15m
+      timeout: 100s
+      retries: 3
+      start_period: 15m
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        gitlab_rails['smtp_enable'] = true
+        gitlab_rails['smtp_address'] = "maildev.example.ru"
+        gitlab_rails['smtp_openssl_verify_mode'] = 'none'
+        gitlab_rails['smtp_port'] = 1025
+        gitlab_rails['gitlab_shell_ssh_port'] = 22
+    ports:
+      - "80:80"
+      - "443:443"
+      - "22:22"
+    volumes:
+      - "config:/etc/gitlab"
+      - "logs:/var/log/gitlab"
+      - "data:/var/opt/gitlab"
+    shm_size: "256m"
+  # This is RUNNER 
+  gitlab-runner:
+    container_name: gitlab-runner
+    image: "gitlab/gitlab-runner:v18.3.1"
+    restart: unless-stopped
+    extra_hosts:
+      - "gitlab.example.com:172.20.0.10"
+      - "registry.example.com:172.20.0.10"
+    volumes:
+      - "runner_conf:/etc/gitlab-runner"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      net:
+        ipv4_address: 172.20.0.11
+  # MAIL 
+  maildev:
+    container_name: maildev
+    image: maildev/maildev:2.2.1
+    hostname: "maildev.example.ru"
+    restart: unless-stopped
+    extra_hosts:
+      - "gitlab.example.com:172.20.0.10"
+    networks:
+      net:
+        ipv4_address: 172.20.0.5
+    ports:
+      - 1080:1080 # maildev - web application 
+      - 1025:1025 # will use 'mail:1025' to send emails
+
+
+# ALL options(network + volume)
+networks:
+  net:
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.20.0.0/16"
+volumes:
+  config:
+  logs:
+  data:
+  runner_conf:
+
+```
+
+
+Добавляем адрес в 
+
+```
+C:\Windows\System32\drivers\etc
+```
+
+`172.20.0.10 gitlab.example.com
+`172.20.0.5 maildev.example.com`
+
+Достать пароль gitlab
+```
+docker exec -it gitlab grep 'Password:' /etc/gitlab/initial_root_password
+```
+
+запуск регистрации
+`docker exec -it gitlab-runner gitlab-runner register`
+
+
+Иногда есть ошибка, что /etc/gitlab-runner/config.toml файл не создан
+Тогда нужно перезапустить гитлаб раннер
+```
+docker restart gitlab-runner
+```
+
+```
+docker-compose up -d
+```
+
+
+В самом начале сгенерируется пароль, который нужно будет достать из контейнера
